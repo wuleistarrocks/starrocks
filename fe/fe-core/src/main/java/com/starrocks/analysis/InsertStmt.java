@@ -38,6 +38,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionType;
 import com.starrocks.catalog.Table;
+import com.starrocks.catalog.Table.TableType;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
@@ -346,8 +347,12 @@ public class InsertStmt extends DdlStmt {
                     targetPartitionIds.add(partition.getId());
                 }
                 if (targetPartitionIds.isEmpty()) {
-                    ErrorReport.reportAnalysisException(
+                    if (olapTable.getType() == TableType.OLAP_EXTERNAL) {
+                        ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLE_META_NOT_READY, targetTable.getName());
+                    } else {
+                        ErrorReport.reportAnalysisException(
                             ErrorCode.ERR_EMPTY_PARTITION_IN_TABLE, targetTable.getName());
+                    }
                 }
             }
             // need a descriptor

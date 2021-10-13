@@ -205,17 +205,13 @@ public class ExternalOlapTable extends OlapTable {
         super();
         setType(TableType.OLAP_EXTERNAL);
         dbId = -1;
-        // sourceDbId = -1;
         lastExternalMeta = null;
         externalTableInfo = null;
     }
 
-    public ExternalOlapTable(long dbId, long tableId, String tableName, List<Column> baseSchema, KeysType keysType,
-                             PartitionInfo partitionInfo, DistributionInfo defaultDistributionInfo,
-                             TableIndexes indexes, Map<String, String> properties)
+    public ExternalOlapTable(long dbId, long tableId, String tableName, Map<String, String> properties)
         throws DdlException {
-        super(tableId, tableName, baseSchema, keysType, partitionInfo, defaultDistributionInfo, indexes);
-        setType(TableType.OLAP_EXTERNAL);
+        super(tableId, tableName, TableType.OLAP_EXTERNAL);
         this.dbId = dbId;
         lastExternalMeta = null;
 
@@ -294,9 +290,8 @@ public class ExternalOlapTable extends OlapTable {
     }
 
     public void updateMeta(String dbName, TTableMeta meta, List<TBackendMeta> backendMetas) throws DdlException, IOException {
-        // no meta changed since last time, do nothing
         if (lastExternalMeta != null && meta.compareTo(lastExternalMeta) == 0) {
-            LOG.info("no meta changed since last time, do nothing");
+            LOG.info("no meta changed for table {}:{}, do nothing", dbName, getSourceTableName());
             return;
         }
 

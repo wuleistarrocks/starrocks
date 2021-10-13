@@ -15,6 +15,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionType;
 import com.starrocks.catalog.Table;
+import com.starrocks.catalog.Table.TableType;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.analyzer.relation.InsertRelation;
 import com.starrocks.sql.analyzer.relation.QueryRelation;
@@ -80,9 +81,13 @@ public class InsertAnalyzer {
                     targetPartitionIds.add(partition.getId());
                 }
                 if (targetPartitionIds.isEmpty()) {
-                    throw new SemanticException("data cannot be inserted into table with empty partition." +
+                    if (targetTable.getType() == TableType.OLAP_EXTERNAL) {
+                        throw new SemanticException("External table %s meta not synced.", targetTable.getName());
+                    } else {
+                        throw new SemanticException("data cannot be inserted into table with empty partition." +
                             "Use `SHOW PARTITIONS FROM %s` to see the currently partitions of this table. ",
                             targetTable.getName());
+                    }
                 }
             }
 

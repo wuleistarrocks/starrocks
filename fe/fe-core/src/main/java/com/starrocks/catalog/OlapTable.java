@@ -151,6 +151,10 @@ public class OlapTable extends Table {
         this.tableProperty = null;
     }
 
+    public OlapTable(long id, String tableName, TableType tableType) {
+        this(id, tableName, tableType, null, null, null, null, Catalog.getCurrentCatalog().getClusterId(), null);
+    }
+
     public OlapTable(long id, String tableName, List<Column> baseSchema, KeysType keysType,
                      PartitionInfo partitionInfo, DistributionInfo defaultDistributionInfo) {
         this(id, tableName, baseSchema, keysType, partitionInfo, defaultDistributionInfo, null);
@@ -165,7 +169,14 @@ public class OlapTable extends Table {
     public OlapTable(long id, String tableName, List<Column> baseSchema, KeysType keysType,
                      PartitionInfo partitionInfo, DistributionInfo defaultDistributionInfo,
                      int clusterId, TableIndexes indexes) {
-        super(id, tableName, TableType.OLAP, baseSchema);
+        this(id, tableName, TableType.OLAP, baseSchema, keysType, partitionInfo, defaultDistributionInfo,
+                clusterId, indexes);
+    }
+
+    public OlapTable(long id, String tableName, TableType tableType, List<Column> baseSchema, KeysType keysType,
+                     PartitionInfo partitionInfo, DistributionInfo defaultDistributionInfo,
+                     int clusterId, TableIndexes indexes) {
+        super(id, tableName, tableType, baseSchema);
 
         this.clusterId = clusterId;
         this.state = OlapTableState.NORMAL;
@@ -993,6 +1004,10 @@ public class OlapTable extends Table {
         // state
         Text.writeString(out, state.name());
 
+        if (type == TableType.OLAP_EXTERNAL) {
+            return;
+        }
+
         // indices' schema
         int counter = indexNameToId.size();
         out.writeInt(counter);
@@ -1063,6 +1078,10 @@ public class OlapTable extends Table {
         super.readFields(in);
 
         this.state = OlapTableState.valueOf(Text.readString(in));
+
+        if (type == TableType.OLAP_EXTERNAL) {
+            return;
+        }
 
         // indices's schema
         int counter = in.readInt();

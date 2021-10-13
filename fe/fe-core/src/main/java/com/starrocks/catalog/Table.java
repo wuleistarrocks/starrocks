@@ -110,6 +110,8 @@ public class Table extends MetaObject implements Writable {
         // must copy the list, it should not be the same object as in indexIdToSchmea
         if (fullSchema != null) {
             this.fullSchema = Lists.newArrayList(fullSchema);
+        } else {
+            this.fullSchema = Lists.newArrayList();
         }
         this.nameToColumn = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
         if (this.fullSchema != null) {
@@ -117,8 +119,8 @@ public class Table extends MetaObject implements Writable {
                 nameToColumn.put(col.getName(), col);
             }
         } else {
-            // Only view in with-clause have null base
-            Preconditions.checkArgument(type == TableType.VIEW, "Table has no columns");
+            // Only view and olap foreign table in with-clause have null base
+            Preconditions.checkArgument((type == TableType.VIEW || type == TableType.OLAP_EXTERNAL), "Table has no columns");
         }
         this.createTime = Instant.now().getEpochSecond();
     }
@@ -216,10 +218,12 @@ public class Table extends MetaObject implements Writable {
         Text.writeString(out, name);
 
         // base schema
-        int columnCount = fullSchema.size();
+        int columnCount = (fullSchema == null ? 0 : fullSchema.size());
         out.writeInt(columnCount);
-        for (Column column : fullSchema) {
-            column.write(out);
+        if (fullSchema != null) {
+            for (Column column : fullSchema) {
+                column.write(out);
+            }
         }
 
         Text.writeString(out, comment);

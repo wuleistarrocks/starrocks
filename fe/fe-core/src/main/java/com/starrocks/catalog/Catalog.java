@@ -3015,7 +3015,11 @@ public class Catalog {
         }
 
         if (engineName.equals("olap")) {
-            createOlapTable(db, stmt);
+            if (stmt.isExternal()) {
+                createOlapExternalTable(db, stmt);
+            } else {
+                createOlapTable(db, stmt);
+            }
             return;
         } else if (engineName.equals("mysql")) {
             createMysqlTable(db, stmt);
@@ -3766,6 +3770,28 @@ public class Catalog {
         }
     }
 
+    private void createOlapExternalTable(Database db, CreateTableStmt stmt) throws DdlException {
+        String tableName = stmt.getTableName();
+        long tableId = Catalog.getCurrentCatalog().getNextId();
+        ExternalOlapTable table = new ExternalOlapTable(db.getId(), tableId, tableName, stmt.getProperties());
+
+        // check database exists again, because database can be dropped when creating table
+        if (!tryLock(false)) {
+            throw new DdlException("Failed to acquire catalog lock. Try again");
+        }
+
+        try {
+            if (getDb(db.getFullName()) == null) {
+                throw new DdlException("database has been dropped when creating table");
+            }
+            if (!db.createTableWithLock(table, false, stmt.isSetIfNotExists())) {
+                ErrorReport.reportDdlException(ErrorCode.ERR_CANT_CREATE_TABLE, tableName, "table already exists");
+            }
+        } finally {
+            unlock();
+        }
+    }
+
     // Create olap table and related base index synchronously.
     private void createOlapTable(Database db, CreateTableStmt stmt) throws DdlException {
         String tableName = stmt.getTableName();
@@ -3819,13 +3845,8 @@ public class Catalog {
         // create table
         long tableId = Catalog.getCurrentCatalog().getNextId();
         OlapTable olapTable = null;
-        if (stmt.isExternal()) {
-            olapTable = new ExternalOlapTable(db.getId(), tableId, tableName, baseSchema, keysType, partitionInfo,
-                                              distributionInfo, indexes, stmt.getProperties());
-        } else {
-            olapTable = new OlapTable(tableId, tableName, baseSchema, keysType, partitionInfo,
-                                      distributionInfo, indexes);
-        }
+        olapTable = new OlapTable(tableId, tableName, baseSchema, keysType, partitionInfo,
+                                  distributionInfo, indexes);
         olapTable.setComment(stmt.getComment());
 
         // set base index id
@@ -4262,14 +4283,16 @@ public class Catalog {
             OlapTable olapTable = (OlapTable) table;
 
             // keys
-            sb.append("\n").append(olapTable.getKeysType().toSql()).append("(");
-            List<String> keysColumnNames = Lists.newArrayList();
-            for (Column column : olapTable.getBaseSchema()) {
-                if (column.isKey()) {
-                    keysColumnNames.add("`" + column.getName() + "`");
+            if (olapTable.getKeysType() != null) {
+                sb.append("\n").append(olapTable.getKeysType().toSql()).append("(");
+                List<String> keysColumnNames = Lists.newArrayList();
+                for (Column column : olapTable.getBaseSchema()) {
+                    if (column.isKey()) {
+                        keysColumnNames.add("`" + column.getName() + "`");
+                    }
                 }
+                sb.append(Joiner.on(", ").join(keysColumnNames)).append(")");
             }
-            sb.append(Joiner.on(", ").join(keysColumnNames)).append(")");
 
             if (!Strings.isNullOrEmpty(table.getComment())) {
                 sb.append("\nCOMMENT \"").append(table.getComment()).append("\"");
@@ -4281,13 +4304,15 @@ public class Catalog {
             if (separatePartition) {
                 partitionId = Lists.newArrayList();
             }
-            if (partitionInfo.getType() == PartitionType.RANGE) {
+            if ((partitionInfo != null) && (partitionInfo.getType() == PartitionType.RANGE)) {
                 sb.append("\n").append(partitionInfo.toSql(olapTable, partitionId));
             }
 
             // distribution
             DistributionInfo distributionInfo = olapTable.getDefaultDistributionInfo();
-            sb.append("\n").append(distributionInfo.toSql());
+            if (distributionInfo != null) {
+                sb.append("\n").append(distributionInfo.toSql());
+            }
 
             // properties
             sb.append("\nPROPERTIES (\n");

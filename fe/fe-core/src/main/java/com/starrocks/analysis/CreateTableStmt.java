@@ -250,6 +250,10 @@ public class CreateTableStmt extends DdlStmt {
         return indexes;
     }
 
+    public boolean isOlapExternalTable() {
+        return (isExternal && engineName.equals("olap"));
+    }
+
     @Override
     public void analyze(Analyzer analyzer) throws UserException {
         super.analyze(analyzer);
@@ -303,12 +307,12 @@ public class CreateTableStmt extends DdlStmt {
                         }
                         keysColumnNames.add(columnDef.getName());
                     }
-                    if (columnDefs.isEmpty()) {
+                    if (!isOlapExternalTable() && columnDefs.isEmpty()) {
                         throw new AnalysisException("Empty schema");
                     }
                     // The OLAP table must has at least one short key and the float and double should not be short key.
                     // So the float and double could not be the first column in OLAP table.
-                    if (keysColumnNames.isEmpty()) {
+                    if (!isOlapExternalTable() && keysColumnNames.isEmpty()) {
                         throw new AnalysisException(
                                 "Data type of first column cannot be " + columnDefs.get(0).getType());
                     }
@@ -316,18 +320,21 @@ public class CreateTableStmt extends DdlStmt {
                 }
             }
 
-            keysDesc.analyze(columnDefs);
-            for (int i = 0; i < keysDesc.keysColumnSize(); ++i) {
-                columnDefs.get(i).setIsKey(true);
-            }
-            if (keysDesc.getKeysType() != KeysType.AGG_KEYS) {
-                AggregateType type = AggregateType.REPLACE;
-                // note: PRIMARY_KEYS uses REPLACE aggregate type for now
-                if (keysDesc.getKeysType() == KeysType.DUP_KEYS) {
-                    type = AggregateType.NONE;
+            /* olap external table do not need key desc */
+            if (!isOlapExternalTable()) {
+                keysDesc.analyze(columnDefs);
+                for (int i = 0; i < keysDesc.keysColumnSize(); ++i) {
+                    columnDefs.get(i).setIsKey(true);
                 }
-                for (int i = keysDesc.keysColumnSize(); i < columnDefs.size(); ++i) {
-                    columnDefs.get(i).setAggregateType(type);
+                if (keysDesc.getKeysType() != KeysType.AGG_KEYS) {
+                    AggregateType type = AggregateType.REPLACE;
+                    // note: PRIMARY_KEYS uses REPLACE aggregate type for now
+                    if (keysDesc.getKeysType() == KeysType.DUP_KEYS) {
+                        type = AggregateType.NONE;
+                    }
+                    for (int i = keysDesc.keysColumnSize(); i < columnDefs.size(); ++i) {
+                        columnDefs.get(i).setAggregateType(type);
+                    }
                 }
             }
         } else {
@@ -344,6 +351,9 @@ public class CreateTableStmt extends DdlStmt {
             }
         }
 
+        if (isOlapExternalTable()) {
+            return;
+        }
         // analyze column def
         if (columnDefs == null || columnDefs.isEmpty()) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLE_MUST_HAVE_COLUMNS);

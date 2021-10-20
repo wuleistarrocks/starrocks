@@ -642,10 +642,37 @@ public class DatabaseTransactionMgr {
                             // if most replica's version have been updated to version published
                             // which means publish version task finished in replica  
                             for (Replica replica : tablet.getReplicas()) {
-                                if (!errReplicas.contains(replica.getId()) && replica.getLastFailedVersion() < 0) {
-                                    if (replica.getVersion() >= partitionCommitInfo.getVersion()) {
+                                LOG.info("txn: {}, tablet: {}, replica: {}, version: {}, commit version: {}, failedversion: {}",
+                                         txn.getTransactionId(), tablet.getId(), replica.getId(),
+                                         replica.getVersion(), partitionCommitInfo.getVersion(), replica.getLastFailedVersion());
+                                // if (!errReplicas.contains(replica.getId()) && replica.getLastFailedVersion() < 0) {
+                                //     if (replica.getVersion() >= partitionCommitInfo.getVersion()) {
+                                //         ++healthReplicaNum;
+                                //     }
+                                // }
+                                if (!errReplicas.contains(replica.getId())
+                                        && replica.getLastFailedVersion() < 0) {
+                                    if (replica.checkVersionCatchUp(partition.getVisibleVersion(),
+                                            partition.getVisibleVersionHash(), true)) {
+                                        replica.updateVersionInfo(partitionCommitInfo.getVersion(),
+                                                partitionCommitInfo.getVersionHash(),
+                                                replica.getDataSize(), replica.getRowCount());
                                         ++healthReplicaNum;
+                                    } else {
+                                        replica.updateVersionInfo(replica.getVersion(), replica.getVersionHash(),
+                                                partition.getVisibleVersion(), partition.getVisibleVersionHash(),
+                                                partitionCommitInfo.getVersion(), partitionCommitInfo.getVersionHash());
+                                        LOG.warn("transaction state {} has error, the replica [{}] not appeared " +
+                                                        "in error replica list and its version not equal to partition " +
+                                                        "commit version or commit version - 1 if its not a upgrate " +
+                                                        "stage, its a fatal error. ",
+                                                txn, replica);
                                     }
+                                } else if (replica.getVersion() >= partitionCommitInfo.getVersion()) {
+                                    // the replica's version is larger than or equal to current transaction partition's version
+                                    // the replica is normal, then remove it from error replica ids
+                                    errReplicas.remove(replica.getId());
+                                    ++healthReplicaNum;
                                 }
                             }
                             if (healthReplicaNum < quorumNum) {

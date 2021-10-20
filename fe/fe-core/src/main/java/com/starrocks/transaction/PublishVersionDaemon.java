@@ -110,6 +110,7 @@ public class PublishVersionDaemon extends MasterDaemon {
             boolean shouldFinishTxn = true;
             if (!allTaskFinished) {
                 shouldFinishTxn = globalTransactionMgr.canTxnFinished(transactionState, publishErrorReplicaIds);
+                LOG.info("check transaction {} can be finished: {}", transactionState.getTransactionId(), shouldFinishTxn);
             }
 
             if (shouldFinishTxn) {

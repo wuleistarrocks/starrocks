@@ -62,6 +62,19 @@ class MemTableFlushExecutor;
 class Tablet;
 class UpdateManager;
 
+struct EngineOptions {
+    // list paths that tablet will be put into.
+    std::vector<StorePath> store_paths;
+    // BE's UUID. It will be reset every time BE restarts.
+    UniqueId backend_uid{0, 0};
+    MemTracker* tablet_meta_mem_tracker = nullptr;
+    MemTracker* compaction_mem_tracker = nullptr;
+    MemTracker* schema_change_mem_tracker = nullptr;
+    MemTracker* update_mem_tracker = nullptr;
+
+    static EngineOptions new_options(std::vector<starrocks::StorePath> paths, ExecEnv *env);
+};
+
 // StorageEngine singleton to manage all Table pointers.
 // Providing add/drop/get operations.
 // StorageEngine instance doesn't own the Table resources, just hold the pointer,
@@ -70,6 +83,10 @@ class StorageEngine {
 public:
     StorageEngine(const EngineOptions& options);
     ~StorageEngine();
+
+    // init storage engine
+    // return true means init successed, false or else
+    bool init(starrocks::ExecEnv* env);
 
     static Status open(const EngineOptions& options, StorageEngine** engine_ptr);
 

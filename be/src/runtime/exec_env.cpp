@@ -75,6 +75,7 @@ static int64_t calc_process_max_load_memory(int64_t process_mem_limit) {
 }
 
 Status ExecEnv::init(ExecEnv* env, const std::vector<StorePath>& store_paths) {
+    RETURN_IF_ERROR(env->init_mem_tracker());
     return env->_init(store_paths);
 }
 
@@ -136,7 +137,7 @@ Status ExecEnv::_init(const std::vector<StorePath>& store_paths) {
     Status status = _load_path_mgr->init();
     if (!status.ok()) {
         LOG(ERROR) << "load path mgr init failed." << status.get_error_msg();
-        exit(-1);
+        return status;
     }
     _broker_mgr->init();
     _small_file_mgr->init();
@@ -171,7 +172,7 @@ Status ExecEnv::init_mem_tracker() {
     // --mem_limit="" means no memory limit
     bytes_limit = ParseUtil::parse_mem_spec(config::mem_limit, &is_percent);
     if (bytes_limit <= 0) {
-        ss << "Failed to parse mem limit from '" + config::mem_limit + "'.";
+        ss << "Failed to parse memory limit from '" + config::mem_limit + "'.";
         return Status::InternalError(ss.str());
     }
 
@@ -180,11 +181,6 @@ Status ExecEnv::init_mem_tracker() {
                      << " exceeds physical memory of " << PrettyPrinter::print(MemInfo::physical_mem(), TUnit::BYTES)
                      << ". Using physical memory instead";
         bytes_limit = MemInfo::physical_mem();
-    }
-
-    if (bytes_limit <= 0) {
-        ss << "Invalid mem limit: " << bytes_limit;
-        return Status::InternalError(ss.str());
     }
 
     _mem_tracker = new MemTracker(MemTracker::PROCESS, bytes_limit, "process");

@@ -186,4 +186,26 @@ AgentStatus create_heartbeat_server(ExecEnv* exec_env, uint32_t server_port, Thr
             new ThriftServer(server_name, server_processor, server_port, exec_env->metrics(), worker_thread_num);
     return STARROCKS_SUCCESS;
 }
+
+bool create_and_start_heartbeat_server(ExecEnv *env, TMasterInfo* master) {
+    starrocks::ThriftServer* heartbeat_thrift_server = nullptr;
+    auto error = create_heartbeat_server(
+            env, starrocks::config::heartbeat_service_port,
+            &heartbeat_thrift_server,
+            starrocks::config::heartbeat_service_thread_count,
+            master);
+    if (starrocks::AgentStatus::STARROCKS_SUCCESS != error) {
+        LOG(ERROR) << "Failed to create heartbeat server on port " << starrocks::config::webserver_port
+                   << ", err: " << error;
+        return false;
+    }
+
+    auto status = heartbeat_thrift_server->start();
+    if (!status.ok()) {
+        LOG(ERROR) << "StarRocks BE HeartBeat Service did not start correctly. Error=" << status.to_string();
+        return false;
+    }
+
+    return true;
+}
 } // namespace starrocks

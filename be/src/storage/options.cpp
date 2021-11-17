@@ -124,7 +124,7 @@ OLAPStatus parse_root_path(const string& root_path, StorePath* path) {
     return OLAP_SUCCESS;
 }
 
-OLAPStatus parse_conf_store_paths(const string& config_path, std::vector<StorePath>* paths) {
+bool parse_conf_store_paths(const string& config_path, std::vector<StorePath>* paths) {
     std::vector<string> path_vec = strings::Split(config_path, ";", strings::SkipWhitespace());
     for (auto& item : path_vec) {
         StorePath path;
@@ -137,9 +137,29 @@ OLAPStatus parse_conf_store_paths(const string& config_path, std::vector<StorePa
     }
     if (paths->empty() || (path_vec.size() != paths->size() && !config::ignore_broken_disk)) {
         LOG(WARNING) << "fail to parse storage_root_path config. value=[" << config_path << "]";
-        return OLAP_ERR_INPUT_PARAMETER_ERROR;
+        return false;
     }
-    return OLAP_SUCCESS;
+
+    for (auto it = paths->begin(); it != paths->end();) {
+        if (!starrocks::check_datapath_rw(it->path)) {
+            if (starrocks::config::ignore_broken_disk) {
+                LOG(WARNING) << "read write test file failed, path=" << it->path;
+                it = paths->erase(it);
+            } else {
+                LOG(FATAL) << "read write test file failed, path=" << it->path;
+                return false;
+            }
+        } else {
+            ++it;
+        }
+    }
+
+    if (paths->empty()) {
+        LOG(FATAL) << "All disks are broken, exit.";
+        return false;
+    }
+
+    return true;
 }
 
 } // end namespace starrocks

@@ -163,6 +163,7 @@ COPY_EXIT:
 
     return res;
 }
+
 OLAPStatus read_write_test_file(const string& test_file_path) {
     if (access(test_file_path.c_str(), F_OK) == 0) {
         if (remove(test_file_path.c_str()) != 0) {

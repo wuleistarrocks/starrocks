@@ -87,11 +87,40 @@ namespace starrocks {
 
 StorageEngine* StorageEngine::_s_instance = nullptr;
 
+EngineOptions EngineOptions::new_options(std::vector<starrocks::StorePath> paths, starrocks::ExecEnv* env) {
+    EngineOptions options;
+    options.store_paths = paths;
+    options.backend_uid = starrocks::UniqueId::gen_uid();
+    options.tablet_meta_mem_tracker = env->tablet_meta_mem_tracker();
+    options.schema_change_mem_tracker = env->schema_change_mem_tracker();
+    options.compaction_mem_tracker = env->compaction_mem_tracker();
+    options.update_mem_tracker = env->update_mem_tracker();
+    return options;
+}
+
 static Status _validate_options(const EngineOptions& options) {
     if (options.store_paths.empty()) {
         return Status::InternalError("store paths is empty");
     }
     return Status::OK();
+}
+
+bool StorageEngine::init(starrocks::ExecEnv* env) {
+    auto s = _open();
+    if (!s.ok()) {
+        return false;
+    }
+
+    env->set_storage_engine(this);
+
+    _heartbeat_flags = env->heartbeat_flags();
+
+    // start all backgroud threads of storage engine.
+    // SHOULD be called after exec env is initialized.
+    if (!start_bg_threads().ok()) {
+        return false;
+    }
+    return true;
 }
 
 Status StorageEngine::open(const EngineOptions& options, StorageEngine** engine_ptr) {

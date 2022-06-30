@@ -161,7 +161,7 @@ private:
 
 class StarletFileSystem : public FileSystem {
 public:
-    StarletFileSystem() {}
+    StarletFileSystem() { staros::starlet::fslib::register_builtin_filesystems(); }
     ~StarletFileSystem() override = default;
 
     StarletFileSystem(const StarletFileSystem&) = delete;

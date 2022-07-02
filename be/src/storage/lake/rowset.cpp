@@ -138,7 +138,8 @@ Status Rowset::load_segments() {
     size_t footer_size_hint = 16 * 1024;
     uint32_t seg_id = 0;
     for (const auto& seg_name : _rowset_metadata->segments()) {
-        auto seg_path = fmt::format("{}/{}", _group, seg_name);
+        // auto seg_path = fmt::format("{}/{}", _group, seg_name);
+        auto seg_path = fmt::format("{}/{}?ShardId=5", _group, seg_name);
         auto res = Segment::open(ExecEnv::GetInstance()->tablet_meta_mem_tracker(), fs, seg_path, seg_id++,
                                  _tablet_schema.get(), &footer_size_hint);
         if (!res.ok()) {

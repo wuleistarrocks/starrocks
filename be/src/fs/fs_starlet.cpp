@@ -50,13 +50,21 @@ static Status to_status(absl::Status absl_status) {
     }
 }
 
+inline bool starts_with(std::string_view s, std::string_view prefix) {
+    return (s.size() >= prefix.size()) && (memcmp(s.data(), prefix.data(), prefix.size()) == 0);
+}
+
 StatusOr<std::pair<std::string, int64_t>> parse_starlet_path(const std::string& path) {
-    int pos = path.find("?ShardId=");
+    if (!starts_with(path, "staros://")) {
+        return Status::InvalidArgument(fmt::format("invalid starlet file system path: {}, not begin with 'staros:'", path));
+    }
+    auto real_path = path.substr(strlen("staros://"));
+    int pos = real_path.find("?ShardId=");
     if (pos == std::string::npos) {
         return Status::InvalidArgument(fmt::format("Starlet Fs need a ShardId, {}", path));
     }
-    int64_t shardid = std::stol(path.substr(pos + std::strlen("?ShardId=")));
-    return std::make_pair(path.substr(0, pos), shardid);
+    int64_t shardid = std::stol(real_path.substr(pos + std::strlen("?ShardId=")));
+    return std::make_pair(real_path.substr(0, pos), shardid);
 };
 
 class StarletInputStream : public starrocks::io::SeekableInputStream {
@@ -432,45 +440,26 @@ public:
     }
 
 private:
+    void get_s3_store_conf(const staros::starlet::ShardInfo& shard_info, Configuration* conf) {
+        auto s3_store_info = shard_info.get_s3_store_info();
+        conf->emplace(std::make_pair("scheme", "s3://"));
+        conf->emplace(std::make_pair(kS3AccessKeyId, s3_store_info.access_key));
+        conf->emplace(std::make_pair(kS3AccessKeySecret, s3_store_info.access_key_secret));
+        conf->emplace(std::make_pair(kS3OverrideEndpoint, s3_store_info.endpoint));
+        conf->emplace(std::make_pair(kS3Bucket, s3_store_info.bucket));
+    }
+
     StatusOr<Configuration> get_shard_config(int64_t shard_id) {
         Configuration conf;
-        ASSIGN_OR_RETURN(auto shardinfo, g_worker->get_shard_info(shard_id));
+        ASSIGN_OR_RETURN(auto shard_info, g_worker->get_shard_info(shard_id));
 
-        auto iter = shardinfo.properties.find("scheme");
-        if (iter == shardinfo.properties.end()) {
-            // default use starlet s3 filesystem
-            conf.emplace(std::make_pair("scheme", "s3://"));
+        auto scheme = shard_info.get_object_store_scheme();
+        if (scheme == staros::starlet::ObjectStoreType::S3) {
+            get_s3_store_conf(shard_info, &conf);
         } else {
-            conf.emplace(std::make_pair("scheme", std::move(iter->second)));
+            // Not supported for now
+            return Status::InvalidArgument(fmt::format("Invalid object store scheme: {}", scheme));
         }
-
-        iter = shardinfo.properties.find(kS3AccessKeyId);
-        if (iter == shardinfo.properties.end()) {
-            return Status::InvalidArgument(
-                    fmt::format("shardinfo {} should contains {} conf", shard_id, kS3AccessKeyId));
-        }
-        conf.emplace(std::make_pair(kS3AccessKeyId, std::move(iter->second)));
-
-        iter = shardinfo.properties.find(kS3AccessKeySecret);
-        if (iter == shardinfo.properties.end()) {
-            return Status::InvalidArgument(
-                    fmt::format("shardinfo {} should contains {} conf", shard_id, kS3AccessKeySecret));
-        }
-        conf.emplace(std::make_pair(kS3AccessKeySecret, std::move(iter->second)));
-
-        iter = shardinfo.properties.find(kS3OverrideEndpoint);
-        if (iter == shardinfo.properties.end()) {
-            return Status::InvalidArgument(
-                    fmt::format("shardinfo {} should contains {} conf", shard_id, kS3OverrideEndpoint));
-        }
-        conf.emplace(std::make_pair(kS3OverrideEndpoint, std::move(iter->second)));
-
-        iter = shardinfo.properties.find(kS3Bucket);
-        if (iter == shardinfo.properties.end()) {
-            return Status::InvalidArgument(fmt::format("shardinfo {} should contains {} conf", shard_id, kS3Bucket));
-        }
-        conf.emplace(std::make_pair(kS3Bucket, std::move(iter->second)));
-
         return conf;
     }
 };

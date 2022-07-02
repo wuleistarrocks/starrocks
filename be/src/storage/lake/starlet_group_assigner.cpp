@@ -22,11 +22,12 @@ StatusOr<std::string> StarletGroupAssigner::get_group(int64_t tablet_id) {
         return Status::InternalError("init_staros_worker() must be called before get_shard_info()");
     }
     ASSIGN_OR_RETURN(auto shardinfo, g_worker->get_shard_info(tablet_id));
-    auto iter = shardinfo.properties.find(kGroupKey);
-    if (iter == shardinfo.properties.end()) {
-        return Status::InternalError(fmt::format("Fail to find {} group path", tablet_id));
-    }
-    return std::move(iter->second);
+    // auto iter = shardinfo.properties.find(kGroupKey);
+    // if (iter == shardinfo.properties.end()) {
+    //     return Status::InternalError(fmt::format("Fail to find {} group path", tablet_id));
+    // }
+    // return std::move(iter->second);
+    return fmt::format("{}{}", kStarletPrefix, shardinfo.get_s3_store_info().uri);
 }
 
 Status StarletGroupAssigner::list_group(std::set<std::string>* groups) {

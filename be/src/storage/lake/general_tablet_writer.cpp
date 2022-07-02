@@ -47,7 +47,7 @@ void GeneralTabletWriter::close() {
     if (!_finished && !_files.empty()) {
         // Delete files
         auto group = _tablet.group();
-        auto maybe_fs = FileSystem::CreateSharedFromString(group);
+        auto maybe_fs = FileSystem::CreateSharedFromString("staros");
         if (maybe_fs.ok()) {
             auto fs = std::move(maybe_fs).value();
             for (const auto& name : _files) {
@@ -62,7 +62,8 @@ void GeneralTabletWriter::close() {
 
 Status GeneralTabletWriter::reset_segment_writer() {
     auto name = fmt::format("{}.dat", generate_uuid_string());
-    auto path = fmt::format("{}/{}", _tablet.group(), name);
+    // auto path = fmt::format("{}/{}", _tablet.group(), name);
+    auto path = fmt::format("{}/{}?ShardId={}", _tablet.group(), name, _tablet.id());
     ASSIGN_OR_RETURN(auto of, fs::new_writable_file(path));
     SegmentWriterOptions opts;
     opts.storage_format_version = 2;

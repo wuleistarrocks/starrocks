@@ -16,19 +16,13 @@
 
 namespace starrocks {
 
-std::ostream& operator<<(std::ostream& os, const staros::starlet::ShardInfo& shard) {
-    return os << "Shard{.id=" << shard.id << " .uri=" << shard.obj_store_info.uri << "}";
-}
-
 absl::Status StarOSWorker::add_shard(const ShardInfo& shard) {
-    LOG(INFO) << "Adding " << shard;
     std::lock_guard l(_mtx);
     _shards[shard.id] = shard;
     return absl::OkStatus();
 }
 
 absl::Status StarOSWorker::remove_shard(const ShardId id) {
-    LOG(INFO) << "Removing " << id;
     std::lock_guard l(_mtx);
     _shards.erase(id);
     return absl::OkStatus();
